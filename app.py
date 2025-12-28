@@ -90,7 +90,7 @@ def _basic_auth_required() -> Optional[Response]:
 # -----------------------------
 # Constants
 # -----------------------------
-WIKIMEDIA_ONTHISDAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month}/{day}"
+WIKIMEDIA_ONTHISDAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month:02d}/{day:02d}"
 NUMBERSAPI_DATE = "http://numbersapi.com/{month}/{day}/date?json"
 
 DEFAULT_SPORTS_KEYWORDS = [
