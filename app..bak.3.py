@@ -122,7 +122,7 @@ def parse_mm_dd(s: str) -> Tuple[int, int]:
     m = re.fullmatch(r"\s*(\d{1,2})-(\d{1,2})\s*", s)
     if not m:
         raise ValueError("Date must be in MM-DD format, e.g. 12-18")
-    month = int(m.group(2))
+    month = int(m.group(1))
     day = int(m.group(2))
     _ = dt.date(2000, month, day)  # validate
     return month, day
@@ -158,8 +158,6 @@ def filter_phones_excluding_birthday_people(
 
 def today_mm_dd() -> Tuple[int, int]:
     t = dt.date.today()
-    #mm = mm.zfill(2)
-    #dd = dd.zfill(2)
     return t.month, t.day
 
 
