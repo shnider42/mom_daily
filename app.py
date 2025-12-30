@@ -3,7 +3,7 @@
 # STILL this will not be what we want, no sign in page, and this day in doesnt work
 # could also be a render issue
 
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 """
 Patti-style "This Day" page + Basic Auth + Mini Calendar (birthdays highlighted)
 
@@ -90,6 +90,7 @@ def _basic_auth_required() -> Optional[Response]:
 # -----------------------------
 # Constants
 # -----------------------------
+# FIX: Wikimedia requires zero-padded MM/DD (e.g., /01/14 not /1/14)
 WIKIMEDIA_ONTHISDAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month:02d}/{day:02d}"
 NUMBERSAPI_DATE = "http://numbersapi.com/{month}/{day}/date?json"
 
@@ -121,14 +122,44 @@ def parse_mm_dd(s: str) -> Tuple[int, int]:
     m = re.fullmatch(r"\s*(\d{1,2})-(\d{1,2})\s*", s)
     if not m:
         raise ValueError("Date must be in MM-DD format, e.g. 12-18")
-    month = int(m.group(1))
+    month = int(m.group(2))
     day = int(m.group(2))
     _ = dt.date(2000, month, day)  # validate
     return month, day
 
 
+def filter_phones_excluding_birthday_people(
+        phones: List[Dict[str, str]],
+        birthday_hits: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    """
+    Remove any phone numbers belonging to people whose birthday is on the selected date.
+    Compares by digits only to be formatting-safe.
+    """
+    exclude_digits = set()
+    for h in birthday_hits:
+        p = str(h.get("phone", "")).strip()
+        if not p:
+            continue
+        exclude_digits.add("".join(ch for ch in p if ch.isdigit()))
+
+    if not exclude_digits:
+        return phones
+
+    kept = []
+    for item in phones:
+        p = str(item.get("phone", "")).strip()
+        digits = "".join(ch for ch in p if ch.isdigit())
+        if digits and digits in exclude_digits:
+            continue
+        kept.append(item)
+    return kept
+
+
 def today_mm_dd() -> Tuple[int, int]:
     t = dt.date.today()
+    #mm = mm.zfill(2)
+    #dd = dd.zfill(2)
     return t.month, t.day
 
 
@@ -287,7 +318,8 @@ def ensure_birthdays_file(path: Path) -> None:
     if path.exists():
         return
     template = [
-        {"name": "Patti", "month": 5, "day": 14, "relation": "Mom", "note": "Chief Fun Fact Officer", "phone": "000-000-0000"},
+        {"name": "Patti", "month": 5, "day": 14, "relation": "Mom", "note": "Chief Fun Fact Officer",
+         "phone": "000-000-0000"},
     ]
     path.write_text(json.dumps(template, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -446,14 +478,14 @@ def numbersapi_fun_fact(month: int, day: int, cache_dir: Path) -> str:
 # Summary + HTML
 # -----------------------------
 def make_sms_summary(
-    date_label: str,
-    fun_fact: str,
-    featured_events: List[Dict[str, Any]],
-    bostonish_featured: List[Dict[str, Any]],
-    rock_featured: List[Dict[str, Any]],
-    birthday_hits: List[Dict[str, Any]],
-    famous_bdays: List[str],
-    seed: int,
+        date_label: str,
+        fun_fact: str,
+        featured_events: List[Dict[str, Any]],
+        bostonish_featured: List[Dict[str, Any]],
+        rock_featured: List[Dict[str, Any]],
+        birthday_hits: List[Dict[str, Any]],
+        famous_bdays: List[str],
+        seed: int,
 ) -> str:
     rng = random.Random(seed + 999)
 
@@ -473,7 +505,8 @@ def make_sms_summary(
         y, t = extract_year_text(headline_it)
         s2 = sentence(f"On this day in {y}: {t}")
     else:
-        s2 = sentence("On this day in history: something interesting definitely happened, and we’re choosing to focus on the sparkle")
+        s2 = sentence(
+            "On this day in history: something interesting definitely happened, and we’re choosing to focus on the sparkle")
 
     s3 = sentence(f"Did you know? {fun_fact.strip()}")
 
@@ -528,21 +561,21 @@ def make_sms_summary(
 
 
 def html_page(
-    title: str,
-    subtitle: str,
-    month: int,
-    day: int,
-    onthisday: Dict[str, Any],
-    fun_fact: str,
-    birthday_hits: List[Dict[str, Any]],
-    phones: List[Dict[str, str]],
-    sports_keywords: List[str],
-    rock_keywords: List[str],
-    seed: int,
-    # NEW inputs for calendar gating
-    birthdays_index: Dict[str, List[str]],
-    show_facts: bool,
-    debug_error: str = "",
+        title: str,
+        subtitle: str,
+        month: int,
+        day: int,
+        onthisday: Dict[str, Any],
+        fun_fact: str,
+        birthday_hits: List[Dict[str, Any]],
+        phones: List[Dict[str, str]],
+        sports_keywords: List[str],
+        rock_keywords: List[str],
+        seed: int,
+        # NEW inputs for calendar gating
+        birthdays_index: Dict[str, List[str]],
+        show_facts: bool,
+        debug_error: str = "",
 ) -> str:
     date_label = dt.date(2000, month, day).strftime("%B %d").replace(" 0", " ")
 
@@ -622,7 +655,7 @@ def html_page(
 
     if birthday_hits:
         names = [str(x.get("name", "someone")).strip() for x in birthday_hits]
-        closer = f"And also, {join_names_nicely(names)} {'was' if len(names)==1 else 'were'} born on this day. Everybody say happy birthday! 🎉"
+        closer = f"And also, {join_names_nicely(names)} {'was' if len(names) == 1 else 'were'} born on this day. Everybody say happy birthday! 🎉"
     else:
         closer = "And also: if someone in the family was born on this day, add them to birthdays.json and I’ll start bragging about it. 😄"
 
@@ -1365,7 +1398,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     </div>
   </header>
-  
+
   <div class="sub" style="margin-top:8px;">
     <span style="opacity:.85">debug:</span>
         date=<strong>{month:02d}-{day:02d}</strong>,
@@ -1447,12 +1480,18 @@ def render_page() -> Response:
     else:
         month, day = today_mm_dd()
 
-    sports_keywords = [k.strip() for k in os.environ.get("SPORTS_KEYWORDS", ",".join(DEFAULT_SPORTS_KEYWORDS)).split(",") if k.strip()]
-    rock_keywords = [k.strip() for k in os.environ.get("ROCK_KEYWORDS", ",".join(DEFAULT_ROCK_KEYWORDS)).split(",") if k.strip()]
+    sports_keywords = [k.strip() for k in
+                       os.environ.get("SPORTS_KEYWORDS", ",".join(DEFAULT_SPORTS_KEYWORDS)).split(",") if k.strip()]
+    rock_keywords = [k.strip() for k in os.environ.get("ROCK_KEYWORDS", ",".join(DEFAULT_ROCK_KEYWORDS)).split(",") if
+                     k.strip()]
 
     birthdays = load_birthdays(birthdays_path)
     birthday_hits = birthdays_for_date(birthdays, month, day)
+
     phones = people_to_phone_list(birthdays)
+    if show_facts:
+        phones = filter_phones_excluding_birthday_people(phones, birthday_hits)
+
     bday_index = build_birthday_index(birthdays)
 
     seed = int(f"{month:02d}{day:02d}")
@@ -1502,17 +1541,21 @@ def main() -> int:
 
     parser.add_argument("--date", help="Date in MM-DD (default: today).")
     parser.add_argument("--out", default=DEFAULT_OUT, help=f"Output HTML filename (default: {DEFAULT_OUT}).")
-    parser.add_argument("--birthdays", default=DEFAULT_BIRTHDAYS, help=f"Path to birthdays.json (default: {DEFAULT_BIRTHDAYS}).")
-    parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR, help=f"Cache directory (default: {DEFAULT_CACHE_DIR}).")
+    parser.add_argument("--birthdays", default=DEFAULT_BIRTHDAYS,
+                        help=f"Path to birthdays.json (default: {DEFAULT_BIRTHDAYS}).")
+    parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR,
+                        help=f"Cache directory (default: {DEFAULT_CACHE_DIR}).")
 
     parser.add_argument("--title", default=DEFAULT_TITLE, help="Page title.")
     parser.add_argument("--subtitle", default=DEFAULT_SUBTITLE, help="Page subtitle.")
     parser.add_argument("--sports-keywords", default=",".join(DEFAULT_SPORTS_KEYWORDS))
     parser.add_argument("--rock-keywords", default=",".join(DEFAULT_ROCK_KEYWORDS))
 
-    parser.add_argument("--serve", action="store_true", help="Run a local web server (requires APP_USER/APP_PASS env vars).")
+    parser.add_argument("--serve", action="store_true",
+                        help="Run a local web server (requires APP_USER/APP_PASS env vars).")
     parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--show", action="store_true", help="When exporting static HTML, include facts immediately (no gating).")
+    parser.add_argument("--show", action="store_true",
+                        help="When exporting static HTML, include facts immediately (no gating).")
 
     args = parser.parse_args()
 
