@@ -92,7 +92,7 @@ def _basic_auth_required() -> Optional[Response]:
 # -----------------------------
 # FIX: Wikimedia requires zero-padded MM/DD (e.g., /01/14 not /1/14)
 WIKIMEDIA_ONTHISDAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month:02d}/{day:02d}"
-NUMBERSAPI_DATE = "https://numbersapi.com/{month}/{day}/date?json"
+NUMBERSAPI_DATE = "http://numbersapi.com/{month}/{day}/date?json"
 
 DEFAULT_SPORTS_KEYWORDS = [
     "Boston", "Red Sox", "Celtics", "Bruins", "Patriots", "Revolution",
@@ -122,11 +122,10 @@ def parse_mm_dd(s: str) -> Tuple[int, int]:
     m = re.fullmatch(r"\s*(\d{1,2})-(\d{1,2})\s*", s)
     if not m:
         raise ValueError("Date must be in MM-DD format, e.g. 12-18")
-    month = int(m.group(1))
+    month = int(m.group(2))
     day = int(m.group(2))
     _ = dt.date(2000, month, day)  # validate
     return month, day
-
 
 
 def filter_phones_excluding_birthday_people(
