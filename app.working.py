@@ -92,7 +92,7 @@ def _basic_auth_required() -> Optional[Response]:
 # -----------------------------
 # FIX: Wikimedia requires zero-padded MM/DD (e.g., /01/14 not /1/14)
 WIKIMEDIA_ONTHISDAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month:02d}/{day:02d}"
-NUMBERSAPI_DATE = "http://numbersapi.com/{month}/{day}/date?json"
+NUMBERSAPI_DATE = "https://numbersapi.com/{month}/{day}/date?json"
 
 DEFAULT_SPORTS_KEYWORDS = [
     "Boston", "Red Sox", "Celtics", "Bruins", "Patriots", "Revolution",
@@ -122,10 +122,11 @@ def parse_mm_dd(s: str) -> Tuple[int, int]:
     m = re.fullmatch(r"\s*(\d{1,2})-(\d{1,2})\s*", s)
     if not m:
         raise ValueError("Date must be in MM-DD format, e.g. 12-18")
-    month = int(m.group(2))
+    month = int(m.group(1))
     day = int(m.group(2))
     _ = dt.date(2000, month, day)  # validate
     return month, day
+
 
 
 def filter_phones_excluding_birthday_people(
@@ -1299,111 +1300,56 @@ document.addEventListener("DOMContentLoaded", () => {
     facts_html = ""
     sms_html = ""
     if show_facts:
-        # Build 8 cards total, but only show 6 (phone list is always included; 5 others are sampled)
-        rng_cards = random.Random(seed + 2024)
+        facts_html = f"""
+  <main>
+    <section class="card">
+      <div class="to-title">📲 Copy/Paste Phone List (for iMessage “To:”)</div>
+      <textarea id="toText" class="to-text" readonly>{html.escape(to_field_text)}</textarea>
+      <div class="sms-actions">
+        <button class="btn" onclick="copyToList()">Copy</button>
+        <span id="copyToStatus" class="hint"></span>
+        <span class="hint">Tip: paste into a new iMessage “To:” field (comma-separated).</span>
+      </div>
+    </section>
 
-        # --- Card builders (keep content close to original) ---
-        phone_card = f"""
-  <section class="card">
-    <div class="to-title">📲 Copy/Paste Phone List (for iMessage “To:”)</div>
-    <textarea id="toText" class="to-text" readonly>{html.escape(to_field_text)}</textarea>
-    <div class="sms-actions">
-      <button class="btn" onclick="copyToList()">Copy</button>
-      <span id="copyToStatus" class="hint"></span>
-      <span class="hint">Tip: paste into a new iMessage “To:” field (comma-separated).</span>
-    </div>
-  </section>
+    <section class="card">
+      <h2>🎂 Family birthdays</h2>
+      <div class="sub" style="margin-top:-2px;">Today’s official job: hype the birthday humans. 🎉</div>
+      {birthday_block(birthday_hits)}
+      {famous_bday_list(famous_bdays_card)}
+      <div class="closer">{html.escape(closer)}</div>
+    </section>
+
+    <section class="card">
+      <h2>📜 On this day in history</h2>
+      <ul>{li_year_text(featured_events)}</ul>
+    </section>
+
+    <section class="card">
+      <h2>🏟️ Boston sports-ish highlights</h2>
+      <div class="sub" style="margin:-6px 0 8px;">(Filtered by: {html.escape(", ".join(sports_keywords))})</div>
+      <ul>{li_year_text(bostonish_featured)}</ul>
+      {"<div class='sub' style='margin-top:8px;'><em>No obvious Boston hits today — still counts as content. 😄</em></div>" if not bostonish_all else ""}
+    </section>
+
+    <section class="card">
+      <h2>🎸 This day in classic rock history</h2>
+      <div class="sub" style="margin:-6px 0 8px;">(Filtered by: {html.escape(", ".join(rock_keywords[:10]))}{'…' if len(rock_keywords) > 10 else ''})</div>
+      <ul>{li_year_text(rockish_featured)}</ul>
+      {"<div class='sub' style='margin-top:8px;'><em>No rock hits found today — add more keywords and we’ll summon them. 🎶</em></div>" if not rockish_all else ""}
+    </section>
+
+    <section class="card">
+      <h2>🧠 Did you know?</h2>
+      <div class="funfact">{html.escape(fun_fact)}</div>
+    </section>
+
+    <section class="card">
+      <h2>👶 Notable births</h2>
+      <ul>{li_year_text(featured_births)}</ul>
+    </section>
+  </main>
 """
-
-        family_card = f"""
-  <section class="card">
-    <h2>🎂 Family birthdays</h2>
-    <div class="sub" style="margin-top:-2px;">Today’s official job: hype the birthday humans. 🎉</div>
-    {birthday_block(birthday_hits)}
-    {famous_bday_list(famous_bdays_card)}
-    <div class="closer">{html.escape(closer)}</div>
-  </section>
-"""
-
-        history_card = f"""
-  <section class="card">
-    <h2>📜 On this day in history</h2>
-    <ul>{li_year_text(featured_events)}</ul>
-  </section>
-"""
-
-        boston_card = f"""
-  <section class="card">
-    <h2>🏟️ Boston sports-ish highlights</h2>
-    <div class="sub" style="margin:-6px 0 8px;">(Filtered by: {html.escape(", ".join(sports_keywords))})</div>
-    <ul>{li_year_text(bostonish_featured)}</ul>
-    {"<div class='sub' style='margin-top:8px;'><em>No obvious Boston hits today — still counts as content. 😄</em></div>" if not bostonish_all else ""}
-  </section>
-"""
-
-        rock_card = f"""
-  <section class="card">
-    <h2>🎸 This day in classic rock history</h2>
-    <div class="sub" style="margin:-6px 0 8px;">(Filtered by: {html.escape(", ".join(rock_keywords[:10]))}{'…' if len(rock_keywords) > 10 else ''})</div>
-    <ul>{li_year_text(rockish_featured)}</ul>
-    {"<div class='sub' style='margin-top:8px;'><em>No rock hits found today — add more keywords and we’ll summon them. 🎶</em></div>" if not rockish_all else ""}
-  </section>
-"""
-
-        funfact_card = f"""
-  <section class="card">
-    <h2>🧠 Did you know?</h2>
-    <div class="funfact">{html.escape(fun_fact)}</div>
-  </section>
-"""
-
-        births_card = f"""
-  <section class="card">
-    <h2>👶 Notable births</h2>
-    <ul>{li_year_text(featured_births)}</ul>
-  </section>
-"""
-
-        # NEW card (family-friendly wildcard)
-        prompts = [
-            "Send one nice text to someone you love — bonus points for a ridiculous emoji combo.",
-            "Do a tiny act of kindness (hold a door, compliment someone, or share snacks like a champion).",
-            "Put on ONE song that makes you feel like the main character and dramatically strut to it for 20 seconds.",
-            "Try a ‘two-minute tidy’ in one small spot — then celebrate like you cleaned the whole house.",
-            "Ask someone a fun question: “What’s your most random talent?” and enjoy the answers.",
-            "Take a picture of something pretty today (sky, pet, coffee, whatever) and declare it ✨art✨.",
-            "Quick nostalgia mission: name a happy memory from your childhood and share it with someone.",
-            "Wholesome chaos: tell somebody you appreciate them, then immediately change the subject like a spy.",
-        ]
-        if birthday_hits:
-            names = [str(x.get("name", "")).strip() for x in birthday_hits if str(x.get("name", "")).strip()]
-            who = join_names_nicely(names) if names else "the birthday human"
-            prompts.insert(0, f"Birthday mission: send {who} one compliment and one meme. (In that order.)")
-
-        wildcard_text = sentence(rng_cards.choice(prompts))
-        wildcard_card = f"""
-  <section class="card">
-    <h2>🎯 Tiny mission of the day</h2>
-    <div class="funfact">{html.escape(wildcard_text)}</div>
-    <div class="sub" style="margin-top:10px;">Optional: if you do it, you’re allowed to say “nailed it” out loud.</div>
-  </section>
-"""
-
-        # We have 8 total cards:
-        #   - phone_card is always shown
-        #   - pick 5 from the remaining 7 (random, but deterministic per day via seed)
-        pool = [family_card, history_card, boston_card, rock_card, funfact_card, births_card, wildcard_card]
-        chosen = rng_cards.sample(pool, k=5) if len(pool) >= 5 else pool[:]
-
-        final_cards = [phone_card] + chosen
-        rng_cards.shuffle(final_cards)
-
-        # Add small staggered animation delays for variety (keeps CSS/JS the same)
-        delayed = []
-        for i, c in enumerate(final_cards):
-            delayed.append(c.replace('class="card"', f'class="card" style="animation-delay: {i*55}ms;"', 1))
-        facts_html = "<main>\n" + "\n".join(delayed) + "\n</main>\n"
-
         sms_html = f"""
   <div class="sms-wrap">
     <div class="sms-card">
