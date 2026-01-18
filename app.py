@@ -1,7 +1,4 @@
-#  I don't think this works.
 # don't forget to change it anyway to app.py
-# STILL this will not be what we want, no sign in page, and this day in doesnt work
-# could also be a render issue
 
 # !/usr/bin/env python3
 """
@@ -92,7 +89,7 @@ def _basic_auth_required() -> Optional[Response]:
 # -----------------------------
 # FIX: Wikimedia requires zero-padded MM/DD (e.g., /01/14 not /1/14)
 WIKIMEDIA_ONTHISDAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month:02d}/{day:02d}"
-NUMBERSAPI_DATE = "http://numbersapi.com/{month}/{day}/date?json"
+NUMBERSAPI_DATE = "https://numbersapi.com/{month}/{day}/date?json"
 
 DEFAULT_SPORTS_KEYWORDS = [
     "Boston", "Red Sox", "Celtics", "Bruins", "Patriots", "Revolution",
@@ -122,7 +119,7 @@ def parse_mm_dd(s: str) -> Tuple[int, int]:
     m = re.fullmatch(r"\s*(\d{1,2})-(\d{1,2})\s*", s)
     if not m:
         raise ValueError("Date must be in MM-DD format, e.g. 12-18")
-    month = int(m.group(2))
+    month = int(m.group(1))
     day = int(m.group(2))
     _ = dt.date(2000, month, day)  # validate
     return month, day
@@ -1530,10 +1527,13 @@ def render_page() -> Response:
 
     # date selection
     qdate = request.args.get("date", "").strip()
-    if qdate:
-        month, day = parse_mm_dd(qdate)
-    else:
-        month, day = today_mm_dd()
+    try:
+        if qdate:
+            month, day = parse_mm_dd(qdate)
+        else:
+            month, day = today_mm_dd()
+    except ValueError as e:
+        return Response(str(e), status=400, mimetype="text/plain")
 
     sports_keywords = [k.strip() for k in
                        os.environ.get("SPORTS_KEYWORDS", ",".join(DEFAULT_SPORTS_KEYWORDS)).split(",") if k.strip()]
