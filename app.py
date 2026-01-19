@@ -307,6 +307,178 @@ def pick_famous_birthdays(births: List[Dict[str, Any]], seed: int, n: int = 2) -
         return uniq
     return rng.sample(uniq, n)
 
+# -----------------------------
+# Context-aware card generation
+# -----------------------------
+
+# Words that usually imply "sports context" (helps avoid political/history senses)
+SPORT_CONTEXT_TERMS = [
+    "mls", "nfl", "nba", "nhl", "mlb",
+    "soccer", "football", "hockey", "basketball", "baseball",
+    "playoff", "playoffs", "final", "finals", "cup", "series",
+    "season", "match", "goal", "coach", "stadium", "arena", "field",
+    "fenway", "gillette", "td garden",
+]
+
+# Hard disambiguation for ambiguous keywords.
+# If a keyword is in here, we ONLY count it when it matches its sport/culture meaning.
+DISAMBIGUATION_PATTERNS = {
+    # "Revolution" should mean New England Revolution (MLS) / Revs
+    "revolution": [
+        r"\bnew england revolution\b",
+        r"\bne revolution\b",
+        r"\brevs\b",
+    ],
+    # "Patriots" should mean New England Patriots (NFL) / Pats
+    "patriots": [
+        r"\bnew england patriots\b",
+        r"\bpats\b",
+        r"\bpatriots\b.*\b(nfl|season|playoff|super bowl|gillette)\b",
+        r"\b(nfl|season|playoff|super bowl|gillette)\b.*\bpatriots\b",
+    ],
+    # Celtics / Bruins are usually fine, but we bias toward team context anyway
+    "celtics": [r"\bboston celtics\b", r"\bceltics\b"],
+    "bruins": [r"\bboston bruins\b", r"\bbruins\b"],
+    "red sox": [r"\bboston red sox\b", r"\bred sox\b", r"\bfenway\b"],
+    # Optional “Seattle sports” support (if it appears in events)
+    "seattle": [r"\bseattle\b", r"\bmariners\b", r"\bseahawks\b", r"\bsounders\b", r"\bkraken\b"],
+    # Optional “Irish” (keep it culture-forward)
+    "irish": [r"\birish\b", r"\bst\.\s*patrick\b", r"\bst patrick\b", r"\bireland\b", r"\bdublin\b"],
+}
+
+# Extra terms we want to *punish* for the sports card (prevents "French Revolution" etc.)
+ANTI_SPORT_SENSE_TERMS = [
+    "french revolution", "american revolution", "revolutionary",
+    "uprising", "overthrow", "coup", "guillotine",
+]
+
+def _normalize_kw(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip().lower())
+
+def _matches_any_regex(text_lower: str, patterns: List[str]) -> bool:
+    for pat in patterns:
+        if re.search(pat, text_lower, flags=re.IGNORECASE):
+            return True
+    return False
+
+def _score_sports_relevance(text: str, keywords: List[str]) -> int:
+    """
+    Higher score = more likely to be the *right* kind of fun sports/culture item.
+    Deterministic scoring (no randomness).
+    """
+    t = (text or "").strip()
+    if not t:
+        return -999
+
+    tl = t.lower()
+
+    # Hard ban: negativity filter already used in your app
+    if not is_positiveish_text(t):
+        return -999
+
+    # Soft ban: avoid obvious “revolution in history” sense for sports card
+    for bad in ANTI_SPORT_SENSE_TERMS:
+        if bad in tl:
+            return -50
+
+    score = 0
+
+    # Sports context boost
+    for w in SPORT_CONTEXT_TERMS:
+        if w in tl:
+            score += 2
+
+    # Keyword scoring with disambiguation
+    for raw_kw in (keywords or []):
+        kw = _normalize_kw(raw_kw)
+        if not kw:
+            continue
+
+        if kw in DISAMBIGUATION_PATTERNS:
+            # Only count if it matches our intended meaning
+            if _matches_any_regex(tl, DISAMBIGUATION_PATTERNS[kw]):
+                score += 8
+            else:
+                # If the keyword is ambiguous and doesn't match intended meaning, penalize it
+                score -= 3
+        else:
+            # Normal keyword: substring match
+            if kw in tl:
+                score += 3
+
+    # Light Boston/Seattle/venue boost (helps surface “local” vibes)
+    if "boston" in tl or "fenway" in tl or "td garden" in tl or "gillette" in tl:
+        score += 4
+    if "seattle" in tl:
+        score += 2
+
+    # If it looks like a clean sports/team sentence, boost slightly
+    if any(x in tl for x in ["won", "champion", "championship", "title", "debut", "opened", "founded", "record"]):
+        score += 2
+
+    return score
+
+def generate_card(
+    *,
+    title: str,
+    items: List[Dict[str, Any]],
+    keywords: List[str],
+    seed: int,
+    empty_message: str,
+    blurb: str = "",
+    n: int = 5,
+    show_keywords: bool = True,
+) -> str:
+    """
+    Drop-in card generator for your HTML.
+    - Filters out negative/morbid events
+    - Disambiguates sports meanings (Revolution => New England Revolution, etc.)
+    - Scores and picks best matches deterministically
+    """
+    scored: List[Tuple[int, Dict[str, Any]]] = []
+    for it in (items or []):
+        _, text = extract_year_text(it)
+        s = _score_sports_relevance(text, keywords)
+        if s <= -100:
+            continue
+        scored.append((s, it))
+
+    # Sort by score (desc), then stabilize by year/text to keep deterministic before sampling
+    scored.sort(key=lambda x: (x[0], extract_year_text(x[1])[0], extract_year_text(x[1])[1]), reverse=True)
+
+    # Take a candidate pool of the best ~20, then sample n deterministically for variety
+    pool = [it for _, it in scored[:20]]
+    if not pool:
+        picked = []
+    else:
+        rng = random.Random(seed)
+        picked = pool if len(pool) <= n else rng.sample(pool, n)
+
+    # Render
+    def li_year_text(items_list: List[Dict[str, Any]]) -> str:
+        if not items_list:
+            return f"<li><em>{html.escape(empty_message)}</em></li>"
+        rows = []
+        for it in items_list:
+            year, text = extract_year_text(it)
+            rows.append(f"<li><span class='year'>{html.escape(year)}</span> {html.escape(text)}</li>")
+        return "\n".join(rows)
+
+    kw_line = ""
+    if show_keywords and keywords:
+        kw_line = f"<div class='sub' style='margin:-6px 0 8px;'>(Filtered by: {html.escape(', '.join(keywords[:12]))}{'…' if len(keywords) > 12 else ''})</div>"
+
+    blurb_html = f"<div class='sub' style='margin-top:-2px;'>{html.escape(blurb)}</div>" if blurb else ""
+
+    return f"""
+  <section class="card">
+    <h2>{html.escape(title)}</h2>
+    {blurb_html}
+    {kw_line}
+    <ul>{li_year_text(picked)}</ul>
+  </section>
+""".strip()
+
 
 # -----------------------------
 # birthdays.json (unified entries incl phone)
@@ -1329,14 +1501,16 @@ document.addEventListener("DOMContentLoaded", () => {
   </section>
 """
 
-        boston_card = f"""
-  <section class="card">
-    <h2>🏟️ Boston sports-ish highlights</h2>
-    <div class="sub" style="margin:-6px 0 8px;">(Filtered by: {html.escape(", ".join(sports_keywords))})</div>
-    <ul>{li_year_text(bostonish_featured)}</ul>
-    {"<div class='sub' style='margin-top:8px;'><em>No obvious Boston hits today — still counts as content. 😄</em></div>" if not bostonish_all else ""}
-  </section>
-"""
+        boston_card = generate_card(
+            title="🏟️ Boston & friends sports corner",
+            items=events,
+            keywords=sports_keywords,
+            seed=seed + 404,
+            blurb="Sports-first, good-vibes-only. If a word has two meanings, we pick the jersey version.",
+            empty_message="No obvious sports hits today — the universe is in a bye week. 😄",
+            n=5,
+            show_keywords=True,
+        )
 
         rock_card = f"""
   <section class="card">
