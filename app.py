@@ -233,16 +233,16 @@ def join_names_nicely(names: List[str]) -> str:
 # -----------------------------
 NEGATIVE_HINTS = [
     "war", "battle", "invasion", "massacre", "terror", "terrorist", "attack", "bomb",
-    "assassination", "assassinated", "murder", "killed", "death", "died", "deadly",
+    "assassination", "assassinated", "murder", "killing", "killed", "kill", "dead", "crashed", "death", "died", "deadly",
     "execution", "genocide", "riot", "shooting",
     "earthquake", "tsunami", "hurricane", "tornado", "flood", "wildfire", "fire",
-    "explosion", "crash", "derail", "disaster", "catastrophe",
+    "explosion", "crash", "crashes", "derail", "disaster", "catastrophe",
     "outbreak", "epidemic", "plague", "pandemic", "cholera",
-    "arrest", "convicted", "sentenced",
+    "arrest", "convicted", "sentenced", "disappear", "police", "disappeared"
 ]
 
 POSITIVE_HINTS = [
-    "won", "wins", "victory", "champion", "championship", "title",
+    "won", "win", "wins", "victory", "champion", "championship", "title",
     "founded", "opens", "opened", "launch", "launched",
     "released", "debut", "premiere",
     "first", "record", "breakthrough",
